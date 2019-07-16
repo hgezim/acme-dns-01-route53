@@ -50,6 +50,12 @@ module.exports.create = function(config) {
 
       let zones = getZones(client).then(zoneData => {
         let zone = zoneData.filter(zone => zone.Name === ch.dnsZone)[0];
+
+        if (! zone) {
+          console.error("Zone could not be found");
+          return null;
+        }
+
         console.log("zone data 42:", zone);
         // console.log("L44 stuff zoneData:", zoneData);
         console.log("L44 stuff ch:", ch);
@@ -78,7 +84,6 @@ module.exports.create = function(config) {
         console.log('Encountered an error setting the record:', e);
       });
 
-      // client.changeResourceRecordSets({ChangeBatch})
       return null;
     },
 
