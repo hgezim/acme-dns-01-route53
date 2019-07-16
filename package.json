@@ -1,0 +1,19 @@
+{
+  "name": "le-challenge-route53-gh",
+  "version": "1.0.0",
+  "description": "An ACME dns-01 challenge handler for node-letsencrypt.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "acme-challenge-test": "^3.3.2",
+    "bluebird": "^3.5.5",
+    "nice-route53": "^1.3.0"
+  },
+  "devDependencies": {
+    "acme-dns-01-test": "^3.3.1"
+  }
+}
