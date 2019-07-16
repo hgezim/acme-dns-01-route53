@@ -1,8 +1,25 @@
 "use strict";
-const route53 = require('nice-route53');
+const AWS = require("aws-sdk");
+
+const getZones = client => {
+  return new Promise((accept, reject) => {
+    // TODO limit this search to only one zone to restrict potential for damage
+    client.listHostedZonesByName((err, data) => {
+      if (err) {
+        reject(err);
+      }
+
+      accept(data.HostedZones.map(zone => {
+        // drop '.' at the end of each zone
+        zone.Name = zone.Name.substr(0, zone.Name.length-1);
+        return zone;
+      })); 
+    });
+  });
+};
 
 module.exports.create = function(config) {
-  const route53 = new NiceRoute53({
+  const client = new AWS.Route53({
     accessKeyId: config.AWS_ACCESS_KEY_ID,
     secretAccessKey: config.AWS_SECRET_ACCESS_KEY
   });
@@ -12,31 +29,66 @@ module.exports.create = function(config) {
       return null;
     },
     zones: function(opts) {
-      console.log("zones opts:", opts);
+      // console.log("zones opts:", opts);
+
       return new Promise((accept, reject) => {
-        route53.zones(function(err, zones) {
+        // TODO limit this search to only one zone to restrict potential for damage
+        client.listHostedZonesByName((err, data) => {
           if (err) {
             reject(err);
           }
 
-          accept(zones.map(zone => zone.name));
-          // zones is an array of zones
-          console.log(zones);
+          let zones = data.HostedZones.map(zone => zone.Name.substr(0, zone.Name.length-1)); // drop '.' at the end of each zone
+    
+          accept(zones);
         });
       });
     },
-    set: function(opts) {
-      console.log("set opts:", opts);
-      throw new Error("set not implemented");
+    set: function(data) {
+      let ch = data.challenge;
+      let txt = ch.dnsAuthorization;
+
+      let zones = getZones(client).then(zoneData => {
+        let zone = zoneData.filter(zone => zone.Name === ch.dnsZone)[0];
+        console.log("zone data 42:", zone);
+        // console.log("L44 stuff zoneData:", zoneData);
+        console.log("L44 stuff ch:", ch);
+        client.changeResourceRecordSets({
+          HostedZoneId: zone.Id,
+          ChangeBatch: {
+            Changes: [{
+              Action: 'UPSERT',
+              ResourceRecordSet: {
+                Name: `${ch.dnsPrefix}.${ch.dnsZone}`,
+                Type: 'TXT',
+                TTL: 300,
+                ResourceRecords: [{Value: `"${txt}"`}]
+              }
+            }],
+            Comment: 'Updated txt record for Gezim' // TODO: fix this to make sense
+          },
+        }, (err, data) => {
+          if (err) {
+            console.log("Error upserting txt record:", err);
+          }
+
+          return true;
+        });
+      }).catch(e => {
+        console.log('Encountered an error setting the record:', e);
+      });
+
+      // client.changeResourceRecordSets({ChangeBatch})
+      return null;
     },
 
     remove: function(opts) {
-      console.log("remove opts:", opts);
+      // console.log("remove opts:", opts);
       throw new Error("remove not implemented");
     },
 
     get: function(opts) {
-      console.log("get opts:", opts);
+    //   console.log("get opts:", opts);
       throw new Error("get not implemented");
     }
   };
