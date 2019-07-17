@@ -1,10 +1,11 @@
 
 Required permissions:
 
-- ListHostedZones
 - ListHostedZonesByName
 
 - ChangeResourceRecordSets
+- ListResourceRecordSets
+- GetChange
 
 
 Limitations:
