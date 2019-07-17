@@ -60,6 +60,7 @@ var getZones = function (client) { return __awaiter(_this, void 0, void 0, funct
     });
 }); };
 exports.create = function (config) {
+    var _this = this;
     var client = new AWS.Route53({
         accessKeyId: config.AWS_ACCESS_KEY_ID,
         secretAccessKey: config.AWS_SECRET_ACCESS_KEY
@@ -68,113 +69,150 @@ exports.create = function (config) {
         init: function (opts) {
             return null;
         },
-        zones: function (opts) {
-            return getZones(client)
-                .then(function (zones) {
-                return zones.map(function (zone) { return zone.Name; });
-            })
-                .catch(function (e) {
-                console.error("Error listing zones:", e);
-                return null;
-            });
-        },
-        set: function (data) {
-            var ch = data.challenge;
-            var txt = ch.dnsAuthorization;
-            return getZones(client)
-                .then(function (zoneData) {
-                var zone = zoneData.filter(function (zone) { return zone.Name === ch.dnsZone; })[0];
-                if (!zone) {
-                    console.error("Zone could not be found");
-                    return null;
+        zones: function (opts) { return __awaiter(_this, void 0, void 0, function () {
+            var zones, e_2;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 2, , 3]);
+                        return [4 /*yield*/, getZones(client)];
+                    case 1:
+                        zones = _a.sent();
+                        return [2 /*return*/, zones.map(function (zone) { return zone.Name; })];
+                    case 2:
+                        e_2 = _a.sent();
+                        console.error("Error listing zones:", e_2);
+                        return [2 /*return*/, null];
+                    case 3: return [2 /*return*/];
                 }
-                return client.changeResourceRecordSets({
-                    HostedZoneId: zone.Id,
-                    ChangeBatch: {
-                        Changes: [
-                            {
-                                Action: "UPSERT",
-                                ResourceRecordSet: {
-                                    Name: ch.dnsPrefix + "." + ch.dnsZone,
-                                    Type: "TXT",
-                                    TTL: 300,
-                                    ResourceRecords: [{ Value: "\"" + txt + "\"" }]
-                                }
-                            }
-                        ],
-                        Comment: "Updated txt record for Gezim" // TODO: fix this to make sense
-                    }
-                }, function (err, data) {
-                    if (err) {
-                        console.log("Error upserting txt record:", err);
-                        return null;
-                    }
-                    return true;
-                });
-            })
-                .catch(function (e) {
-                console.log("Encountered an error setting the record:", e);
-                return null;
             });
-        },
-        remove: function (data) {
-            var ch = data.challenge;
-            var txt = ch.dnsAuthorization;
-            var zones = getZones(client)
-                .then(function (zoneData) {
-                var zone = zoneData.filter(function (zone) { return zone.Name === ch.dnsZone; })[0];
-                if (!zone) {
-                    console.error("Zone could not be found");
-                    return null;
-                }
-                client.changeResourceRecordSets({
-                    HostedZoneId: zone.Id,
-                    ChangeBatch: {
-                        Changes: [
-                            {
-                                Action: "DELETE",
-                                ResourceRecordSet: {
-                                    Name: ch.dnsPrefix + "." + ch.dnsZone,
-                                    Type: "TXT",
-                                    TTL: 300
-                                }
-                            }
-                        ],
-                        Comment: "Delete txt record for Gezim" // TODO: fix this to make sense
-                    }
-                }, function (err, data) {
-                    if (err) {
-                        console.log("Error removing txt record:", err);
-                    }
-                    return true;
-                });
-            })
-                .catch(function (e) {
-                console.log("Encountered an error deleting the record:", e);
-            });
-            return null;
-        },
-        get: function (data) {
-            var ch = data.challenge;
-            var txt = ch.dnsAuthorization;
-            return getZones(client)
-                .then(function (zoneData) {
-                var zone = zoneData.filter(function (zone) { return zone.Name === ch.dnsZone; })[0];
-                if (!zone) {
-                    console.error("Zone could not be found");
-                    Promise.reject(null);
-                }
-                return new Promise(function (accept, reject) {
-                    client.listResourceRecordSets({
-                        HostedZoneId: zone.Id,
-                        StartRecordType: "TXT",
-                        StartRecordName: "" + ch.dnsPrefix
-                    }, function (err, data) {
-                        if (err) {
-                            console.log("Error getting record set list:", err);
-                            reject(null);
+        }); },
+        set: function (data) { return __awaiter(_this, void 0, void 0, function () {
+            var ch, txt, zoneData, zone, setResults, e_3;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        ch = data.challenge;
+                        txt = ch.dnsAuthorization;
+                        console.log("Calling set:", txt);
+                        _a.label = 1;
+                    case 1:
+                        _a.trys.push([1, 4, , 5]);
+                        return [4 /*yield*/, getZones(client)];
+                    case 2:
+                        zoneData = _a.sent();
+                        zone = zoneData.filter(function (zone) { return zone.Name === ch.dnsZone; })[0];
+                        if (!zone) {
+                            console.error("Zone could not be found");
+                            return [2 /*return*/, null];
                         }
-                        var match = data.ResourceRecordSets.filter(function (rrs) { return rrs.Type === "TXT"; })
+                        return [4 /*yield*/, client.changeResourceRecordSets({
+                                HostedZoneId: zone.Id,
+                                ChangeBatch: {
+                                    Changes: [
+                                        {
+                                            Action: "UPSERT",
+                                            ResourceRecordSet: {
+                                                Name: ch.dnsPrefix + "." + ch.dnsZone,
+                                                Type: "TXT",
+                                                TTL: 300,
+                                                ResourceRecords: [{ Value: "\"" + txt + "\"" }]
+                                            }
+                                        }
+                                    ],
+                                    Comment: "Updated txt record for Gezim" // TODO: fix this to make sense
+                                }
+                            }).promise()];
+                    case 3:
+                        setResults = _a.sent();
+                        console.log("Successfully set:", setResults.ChangeInfo);
+                        return [2 /*return*/, true];
+                    case 4:
+                        e_3 = _a.sent();
+                        console.log("Error upserting txt record:", e_3);
+                        return [2 /*return*/, null];
+                    case 5: return [2 /*return*/];
+                }
+            });
+        }); },
+        remove: function (data) { return __awaiter(_this, void 0, void 0, function () {
+            var ch, txt, zoneData, zone, e_4;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        console.log("Calling remote");
+                        ch = data.challenge;
+                        txt = ch.dnsAuthorization;
+                        _a.label = 1;
+                    case 1:
+                        _a.trys.push([1, 4, , 5]);
+                        return [4 /*yield*/, getZones(client)];
+                    case 2:
+                        zoneData = _a.sent();
+                        zone = zoneData.filter(function (zone) { return zone.Name === ch.dnsZone; })[0];
+                        if (!zone) {
+                            console.error("Zone could not be found");
+                            return [2 /*return*/, null];
+                        }
+                        return [4 /*yield*/, client.changeResourceRecordSets({
+                                HostedZoneId: zone.Id,
+                                ChangeBatch: {
+                                    Changes: [
+                                        {
+                                            Action: "DELETE",
+                                            ResourceRecordSet: {
+                                                Name: ch.dnsPrefix + "." + ch.dnsZone,
+                                                Type: "TXT",
+                                                TTL: 300
+                                            }
+                                        }
+                                    ],
+                                    Comment: "Delete txt record for Gezim" // TODO: fix this to make sense
+                                }
+                            }).promise()];
+                    case 3:
+                        _a.sent();
+                        return [2 /*return*/, true];
+                    case 4:
+                        e_4 = _a.sent();
+                        console.log("Encountered an error deleting the record:", e_4);
+                        return [2 /*return*/, null];
+                    case 5: return [2 /*return*/];
+                }
+            });
+        }); },
+        get: function (data) { return __awaiter(_this, void 0, void 0, function () {
+            var ch, txt, zoneData, zone, data_1, tmatch, match, e_5;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        console.log("Calling get");
+                        ch = data.challenge;
+                        txt = ch.dnsAuthorization;
+                        _a.label = 1;
+                    case 1:
+                        _a.trys.push([1, 4, , 5]);
+                        return [4 /*yield*/, getZones(client)];
+                    case 2:
+                        zoneData = _a.sent();
+                        zone = zoneData.filter(function (zone) { return zone.Name === ch.dnsZone; })[0];
+                        if (!zone) {
+                            console.error("Zone could not be found");
+                            return [2 /*return*/, null];
+                        }
+                        return [4 /*yield*/, client.listResourceRecordSets({
+                                HostedZoneId: zone.Id
+                            }).promise()];
+                    case 3:
+                        data_1 = _a.sent();
+                        console.log("looking for: ", ch.dnsAuthorization);
+                        tmatch = data_1.ResourceRecordSets.filter(function (rrs) { return rrs.Type === "TXT"; })
+                            .map(function (rrs) {
+                            return rrs.ResourceRecords[0].Value.substring(1, rrs.ResourceRecords[0].Value.length - 1);
+                        } // remove quotes sorrounding the strings
+                        );
+                        console.log("data L132:", tmatch);
+                        match = data_1.ResourceRecordSets.filter(function (rrs) { return rrs.Type === "TXT"; })
                             .map(function (rrs) {
                             return rrs.ResourceRecords[0].Value.substring(1, rrs.ResourceRecords[0].Value.length - 1);
                         } // remove quotes sorrounding the strings
@@ -184,13 +222,17 @@ exports.create = function (config) {
                             return { dnsAuthorization: txtRec };
                         })[0];
                         console.log("returning match:", match);
-                        accept(match);
-                    });
-                });
-            })
-                .catch(function (e) {
-                console.log("Encountered an error getting TXT records:", e);
+                        if (!match || match.dnsAuthorization === undefined) {
+                            return [2 /*return*/, null];
+                        }
+                        return [2 /*return*/, match];
+                    case 4:
+                        e_5 = _a.sent();
+                        console.log("Encountered an error getting TXT records:", e_5);
+                        return [2 /*return*/, null];
+                    case 5: return [2 /*return*/];
+                }
             });
-        }
+        }); }
     };
 };
