@@ -1,4 +1,4 @@
-import * as AWS from 'aws-sdk';
+import * as AWS from "aws-sdk";
 
 const getZones = async (client: AWS.Route53) => {
   try {
@@ -10,7 +10,7 @@ const getZones = async (client: AWS.Route53) => {
     });
 
     if (data.IsTruncated) {
-      throw 'Too many records to deal with. Some are truncated';
+      throw "Too many records to deal with. Some are truncated. ";
     }
 
     return zoneData;
@@ -19,26 +19,26 @@ const getZones = async (client: AWS.Route53) => {
   }
 };
 
-const getChange = async (client: AWS.Route53, changeId: string) => {
-  try {
-    let change = await client.getChange({Id: changeId}).promise();
-    return change;
-  } catch (e) {
-    console.log(`Error polling for change: ${changeId}:`, e);
-    throw e;
-  }
-};
-
 const sleep = (ms: number) => {
   return new Promise(resolve => setTimeout(resolve, ms));
 };
 
-type Config = {AWS_ACCESS_KEY_ID: string; AWS_SECRET_ACCESS_KEY: string};
+type Config = {
+  AWS_ACCESS_KEY_ID: string;
+  AWS_SECRET_ACCESS_KEY: string;
+  debug: boolean;
+};
 
-export const create = function(config: Config) {
+export const create = function(
+  config: Config = {
+    AWS_ACCESS_KEY_ID: "",
+    AWS_SECRET_ACCESS_KEY: "",
+    debug: false
+  }
+) {
   const client = new AWS.Route53({
     accessKeyId: config.AWS_ACCESS_KEY_ID,
-    secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
+    secretAccessKey: config.AWS_SECRET_ACCESS_KEY
   });
 
   return {
@@ -50,58 +50,74 @@ export const create = function(config: Config) {
         let zones = await getZones(client);
         return zones.map(zone => zone.Name);
       } catch (e) {
-        console.error('Error listing zones:', e);
+        console.error("Error listing zones:", e);
         return null;
       }
     },
     set: async (data: any) => {
-      let ch = data.challenge;
-      let txt = ch.dnsAuthorization;
+      const ch = data.challenge;
+      const txt = ch.dnsAuthorization;
+      const recordName = `${ch.dnsPrefix}.${ch.dnsZone}`;
 
-      console.log('Calling set:', txt);
+      if (config.debug) {
+        console.log(`Setting ${ch} to ${txt}`);
+      }
 
       try {
         let zoneData = await getZones(client);
         let zone = zoneData.filter(zone => zone.Name === ch.dnsZone)[0];
 
         if (!zone) {
-          console.error('Zone could not be found');
+          console.error("Zone could not be found");
           return null;
         }
 
-        let data = await client
+        let recordSetResults = await client
           .listResourceRecordSets({
-            HostedZoneId: zone.Id,
+            HostedZoneId: zone.Id
           })
           .promise();
 
-        let recordName = `${ch.dnsPrefix}.${ch.dnsZone}`;
-
-        console.log(
-          `Could not find existing records for ${recordName} in \n\t in:`,
-          data.ResourceRecordSets.map(rrs => {
-            return {
-              name: rrs.Name,
-              value: rrs.ResourceRecords.map(rrs => rrs.Value).join(','),
-            };
-          })
-        );
+        if (config.debug) {
+          console.log(
+            `No existing records for ${recordName} in \n\t in:`,
+            recordSetResults.ResourceRecordSets.map(rrs => {
+              return {
+                name: rrs.Name,
+                value: rrs.ResourceRecords.map(rrs => rrs.Value).join(",")
+              };
+            })
+          );
+        }
 
         // check if record name already exists
-        let existingRecord = data.ResourceRecordSets.map(rrs => {
-          rrs.Name = rrs.Name.slice(0, -1); // remote last .
+        let existingRecord = recordSetResults.ResourceRecordSets.map(rrs => {
+          rrs.Name = rrs.Name.slice(0, -1);
           return rrs;
-        }).filter(rrs => rrs.Name === recordName);
-        const newRecord = {Value: `"${txt}"`};
-        let resourceRecords: {Value: string}[] = [];
+        }) // Remove last dot (.) from resource record set names
+          .filter(rrs => rrs.Name === recordName); // Only matching record(s)
+
+        const newRecord = { Value: `"${txt}"` };
+        let resourceRecords: { Value: string }[] = [];
+
         if (existingRecord.length) {
-          console.log('Record exists for:', recordName, ' ', existingRecord);
+          // record exists which means we need to append the new record and not set it from scratch (otherwise it replaces existing records)
+          if (config.debug) {
+            console.log("Record exists for:", recordName, ": ", existingRecord);
+          }
           resourceRecords = [...existingRecord[0].ResourceRecords, newRecord];
-          console.log(
-            '\t setting it to:',
-            resourceRecords.map(rrs => rrs.Value).join(',')
-          );
+
+          if (config.debug) {
+            console.log(
+              "\t setting it to:",
+              resourceRecords.map(rrs => rrs.Value).join(",")
+            );
+          }
         } else {
+          if (config.debug) {
+            console.log(`Record does not exist ${recordName}`);
+          }
+
           resourceRecords = [newRecord];
         }
 
@@ -111,140 +127,151 @@ export const create = function(config: Config) {
             ChangeBatch: {
               Changes: [
                 {
-                  Action: 'UPSERT',
+                  Action: "UPSERT",
                   ResourceRecordSet: {
                     Name: recordName,
-                    Type: 'TXT',
+                    Type: "TXT",
                     TTL: 300,
-                    ResourceRecords: resourceRecords,
-                  },
-                },
-              ],
-              Comment: 'Updated txt record for Gezim', // TODO: fix this to make sense
-            },
+                    ResourceRecords: resourceRecords
+                  }
+                }
+              ]
+            }
           })
           .promise();
 
-        console.log(
-          `Successfully set ${ch.dnsPrefix}.${ch.dnsZone} to "${txt}"`
-        );
-
-        let status = setResults.ChangeInfo.Status;
-        // while (status === 'PENDING') {
-        //   const timeout = 5000;
-        //   console.log(
-        //     `\t but ... change is still pending. Will check again in ${timeout /
-        //       1000} seconds.`
-        //   );
-        //   // await sleep(timeout);
-        //   let change = await getChange(client, setResults.ChangeInfo.Id);
-        //   status = change.ChangeInfo.Status;
-        // }
+        if (config.debug) {
+          console.log(`Successfully set ${recordName} to "${txt}"`);
+        }
 
         return true;
       } catch (e) {
-        console.log('Error upserting txt record:', e);
+        console.log("Error upserting txt record:", e);
         return null;
       }
     },
 
     remove: async (data: any) => {
-      console.log('Calling remove');
-      let ch = data.challenge;
-      let txt = ch.dnsAuthorization;
+      const ch = data.challenge;
+      const txt = ch.dnsAuthorization;
+      const recordName = `${ch.dnsPrefix}.${ch.dnsZone}`;
+
+      if (config.debug) {
+        console.log(`Removing ${recordName} value ${txt}`);
+      }
 
       try {
         let zoneData = await getZones(client);
         let zone = zoneData.filter(zone => zone.Name === ch.dnsZone)[0];
 
         if (!zone) {
-          console.error('Zone could not be found');
+          console.error("Zone could not be found");
           return null;
         }
 
         // find record first
         let data = await client
           .listResourceRecordSets({
-            HostedZoneId: zone.Id,
+            HostedZoneId: zone.Id
           })
           .promise();
 
+        if (config.debug) {
           console.log(
-            'L173 hehe: \n\t in:',
+            "\n\t from one of these existing records:",
             data.ResourceRecordSets.map(rrs => {
               return {
                 name: rrs.Name,
-                value: rrs.ResourceRecords.map(rrs => rrs.Value).join(','),
+                value: rrs.ResourceRecords.map(rrs => rrs.Value).join(",")
               };
             })
           );
+        }
 
         let match = data.ResourceRecordSets.filter(
-          rrs => rrs.ResourceRecords.filter(txtRs => txtRs.Value.slice(1,-1) === txt).length
-        )[0];
-
-        let recordName = `${ch.dnsPrefix}.${ch.dnsZone}`;
+          rrs =>
+            rrs.ResourceRecords.filter(
+              txtRs => txtRs.Value.slice(1, -1) === txt
+            ).length // remove quotes around record and match it against value we want to remove
+        )[0]; // should only contain one match at most (index 0 doesn't throw here if it doesn't exist)
 
         // if more than one recordset, remove the one we don't want and keep the rest
         if (match && match.ResourceRecords.length > 1) {
-          console.log("upserting to delete a record:", recordName);
+          if (config.debug) {
+            console.log("Upserting to delete a value from:", recordName);
+          }
           // upsert
-          let rr = match.ResourceRecords.filter(rr => rr.Value.slice(1, -1) !== txt);
-          console.log("rr:", rr.map(r => r.Value));
+          let rr = match.ResourceRecords.filter(
+            rr => rr.Value.slice(1, -1) !== txt // remove quotes
+          );
+
+          if (config.debug) {
+            console.log(
+              "\t new records will look like this:",
+              rr.map(r => r.Value)
+            );
+          }
+
           await client
-          .changeResourceRecordSets({
-            HostedZoneId: zone.Id,
-            ChangeBatch: {
-              Changes: [
-                {
-                  Action: 'UPSERT',
-                  ResourceRecordSet: {
-                    Name: recordName,
-                    Type: 'TXT',
-                    TTL: 300,
-                    ResourceRecords: rr,
-                  },
-                },
-              ],
-              Comment: 'Updated txt record for Gezim', // TODO: fix this to make sense
-            },
-          })
-          .promise();
+            .changeResourceRecordSets({
+              HostedZoneId: zone.Id,
+              ChangeBatch: {
+                Changes: [
+                  {
+                    Action: "UPSERT",
+                    ResourceRecordSet: {
+                      Name: recordName,
+                      Type: "TXT",
+                      TTL: 300,
+                      ResourceRecords: rr
+                    }
+                  }
+                ]
+              }
+            })
+            .promise();
         } else {
-          // delete
-          console.log("deleting record for:", recordName);
+          // only one record value exists, so delete it
+
+          if (config.debug) {
+            console.log("Deleting whole record:", recordName);
+            console.log("\t value:", match.ResourceRecords.map(rr => rr.Value));
+          }
+
           await client
-          .changeResourceRecordSets({
-            HostedZoneId: zone.Id,
-            ChangeBatch: {
-              Changes: [
-                {
-                  Action: 'DELETE',
-                  ResourceRecordSet: {
-                    Name: recordName,
-                    Type: 'TXT',
-                    TTL: 300,
-                    ResourceRecords: match.ResourceRecords
-                  },
-                },
-              ],
-              Comment: 'Delete txt record for Gezim', // TODO: fix this to make sense
-            },
-          })
-          .promise();
+            .changeResourceRecordSets({
+              HostedZoneId: zone.Id,
+              ChangeBatch: {
+                Changes: [
+                  {
+                    Action: "DELETE",
+                    ResourceRecordSet: {
+                      Name: recordName,
+                      Type: "TXT",
+                      TTL: 300,
+                      ResourceRecords: match.ResourceRecords
+                    }
+                  }
+                ]
+              }
+            })
+            .promise();
         }
 
         return true;
       } catch (e) {
-        console.log('Encountered an error deleting the record:', e);
+        console.log("Encountered an error deleting the record:", e);
         return null;
       }
     },
 
     get: async (data: any) => {
-      console.log('Calling get');
       let ch = data.challenge;
       let txt = ch.dnsAuthorization;
+
+      if (config.debug) {
+        console.log(`Getting record with ${txt} value`);
+      }
 
       try {
         let zoneData = await getZones(client);
@@ -252,42 +279,39 @@ export const create = function(config: Config) {
         let zone = zoneData.filter(zone => zone.Name === ch.dnsZone)[0];
 
         if (!zone) {
-          console.error('Zone could not be found');
+          console.error("Zone could not be found");
           return null;
         }
 
         let data = await client
           .listResourceRecordSets({
-            HostedZoneId: zone.Id,
+            HostedZoneId: zone.Id
           })
           .promise();
 
         if (data.IsTruncated) {
-          throw 'Too many records to deal with. Some are truncated';
+          throw "Too many records to deal with. Some are truncated";
         }
 
-        data.ResourceRecordSets.reduce((acc, currentValue) => {
-          if (
-            currentValue.ResourceRecords.filter(
-              rrs => rrs.Value.slice(1, -1) === ch.dnsAuthorization
-            )
-          ) {
-          }
-          return acc;
-        });
+        let txtRecords = data.ResourceRecordSets.filter(
+          rrs => rrs.Type === "TXT"
+        );
 
-        let match = data.ResourceRecordSets.filter(rrs => rrs.Type === 'TXT')
-          .map(rrs => {
-            let val = rrs.ResourceRecords.map(rec => rec.Value.slice(1, -1)); // remove quotes sorrounding the strings
-            return val;
-          })
+if(config.debug) {
+          console.log("\t existing txt values:", txtRecords);
+  
+}
+        let match = txtRecords
+          .map(
+            rrs => rrs.ResourceRecords.map(rec => rec.Value.slice(1, -1)) // remove quotes sorrounding the strings
+          )
           .filter(txtRecords => {
-            let val = txtRecords.filter(rec => rec === ch.dnsAuthorization);
+            let val = txtRecords.filter(rec => rec === txt); // match possible multiple values
             return val.length;
           })
           .map(txtRec => {
-            let match = txtRec.filter(rec => rec === ch.dnsAuthorization)[0];
-            return {dnsAuthorization: match};
+            let match = txtRec.filter(rec => rec === txt)[0]; // only one match should exist, get it
+            return { dnsAuthorization: match };
           })[0];
 
         if (!match || match.dnsAuthorization === undefined) {
@@ -296,9 +320,9 @@ export const create = function(config: Config) {
 
         return match;
       } catch (e) {
-        console.log('Encountered an error getting TXT records:', e);
+        console.log("Encountered an error getting TXT records:", e);
         return null;
       }
-    },
+    }
   };
 };

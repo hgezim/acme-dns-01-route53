@@ -4,7 +4,7 @@ var tester = require('acme-dns-01-test');
 var challenger = require('./index.js').create({
     AWS_ACCESS_KEY_ID: 'AKIA4R7OX2WJOI3BFFWZ',
     AWS_SECRET_ACCESS_KEY: 'vYhnlu5o8nE9eYgIfIFVF0P4u2XUcSvULhIjvmR/',
-    zoneName: 'myrecipepage.com'
+    // debug: true
 });
 
 // The dry-run tests can pass on, literally, 'example.com'

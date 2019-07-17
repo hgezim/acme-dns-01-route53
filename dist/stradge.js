@@ -52,7 +52,7 @@ var getZones = function (client) { return __awaiter(_this, void 0, void 0, funct
                     return zone;
                 });
                 if (data.IsTruncated) {
-                    throw 'Too many records to deal with. Some are truncated';
+                    throw "Too many records to deal with. Some are truncated. ";
                 }
                 return [2 /*return*/, zoneData];
             case 2:
@@ -62,39 +62,26 @@ var getZones = function (client) { return __awaiter(_this, void 0, void 0, funct
         }
     });
 }); };
-var getChange = function (client, changeId) { return __awaiter(_this, void 0, void 0, function () {
-    var change, e_2;
-    return __generator(this, function (_a) {
-        switch (_a.label) {
-            case 0:
-                _a.trys.push([0, 2, , 3]);
-                return [4 /*yield*/, client.getChange({ Id: changeId }).promise()];
-            case 1:
-                change = _a.sent();
-                return [2 /*return*/, change];
-            case 2:
-                e_2 = _a.sent();
-                console.log("Error polling for change: " + changeId + ":", e_2);
-                throw e_2;
-            case 3: return [2 /*return*/];
-        }
-    });
-}); };
 var sleep = function (ms) {
     return new Promise(function (resolve) { return setTimeout(resolve, ms); });
 };
 exports.create = function (config) {
     var _this = this;
+    if (config === void 0) { config = {
+        AWS_ACCESS_KEY_ID: "",
+        AWS_SECRET_ACCESS_KEY: "",
+        debug: false
+    }; }
     var client = new AWS.Route53({
         accessKeyId: config.AWS_ACCESS_KEY_ID,
-        secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
+        secretAccessKey: config.AWS_SECRET_ACCESS_KEY
     });
     return {
         init: function (opts) {
             return null;
         },
         zones: function (opts) { return __awaiter(_this, void 0, void 0, function () {
-            var zones, e_3;
+            var zones, e_2;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -104,21 +91,24 @@ exports.create = function (config) {
                         zones = _a.sent();
                         return [2 /*return*/, zones.map(function (zone) { return zone.Name; })];
                     case 2:
-                        e_3 = _a.sent();
-                        console.error('Error listing zones:', e_3);
+                        e_2 = _a.sent();
+                        console.error("Error listing zones:", e_2);
                         return [2 /*return*/, null];
                     case 3: return [2 /*return*/];
                 }
             });
         }); },
         set: function (data) { return __awaiter(_this, void 0, void 0, function () {
-            var ch, txt, zoneData, zone, data_1, recordName_1, existingRecord, newRecord, resourceRecords, setResults, status_1, e_4;
+            var ch, txt, recordName, zoneData, zone, recordSetResults, existingRecord, newRecord, resourceRecords, setResults, e_3;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         ch = data.challenge;
                         txt = ch.dnsAuthorization;
-                        console.log('Calling set:', txt);
+                        recordName = ch.dnsPrefix + "." + ch.dnsZone;
+                        if (config.debug) {
+                            console.log("Setting " + ch + " to " + txt);
+                        }
                         _a.label = 1;
                     case 1:
                         _a.trys.push([1, 5, , 6]);
@@ -127,35 +117,45 @@ exports.create = function (config) {
                         zoneData = _a.sent();
                         zone = zoneData.filter(function (zone) { return zone.Name === ch.dnsZone; })[0];
                         if (!zone) {
-                            console.error('Zone could not be found');
+                            console.error("Zone could not be found");
                             return [2 /*return*/, null];
                         }
                         return [4 /*yield*/, client
                                 .listResourceRecordSets({
-                                HostedZoneId: zone.Id,
+                                HostedZoneId: zone.Id
                             })
                                 .promise()];
                     case 3:
-                        data_1 = _a.sent();
-                        recordName_1 = ch.dnsPrefix + "." + ch.dnsZone;
-                        console.log("Could not find existing records for " + recordName_1 + " in \n\t in:", data_1.ResourceRecordSets.map(function (rrs) {
-                            return {
-                                name: rrs.Name,
-                                value: rrs.ResourceRecords.map(function (rrs) { return rrs.Value; }).join(','),
-                            };
-                        }));
-                        existingRecord = data_1.ResourceRecordSets.map(function (rrs) {
-                            rrs.Name = rrs.Name.slice(0, -1); // remote last .
+                        recordSetResults = _a.sent();
+                        if (config.debug) {
+                            console.log("No existing records for " + recordName + " in \n\t in:", recordSetResults.ResourceRecordSets.map(function (rrs) {
+                                return {
+                                    name: rrs.Name,
+                                    value: rrs.ResourceRecords.map(function (rrs) { return rrs.Value; }).join(",")
+                                };
+                            }));
+                        }
+                        existingRecord = recordSetResults.ResourceRecordSets.map(function (rrs) {
+                            rrs.Name = rrs.Name.slice(0, -1);
                             return rrs;
-                        }).filter(function (rrs) { return rrs.Name === recordName_1; });
+                        }) // Remove last dot (.) from resource record set names
+                            .filter(function (rrs) { return rrs.Name === recordName; });
                         newRecord = { Value: "\"" + txt + "\"" };
                         resourceRecords = [];
                         if (existingRecord.length) {
-                            console.log('Record exists for:', recordName_1, ' ', existingRecord);
+                            // record exists which means we need to append the new record and not set it from scratch (otherwise it replaces existing records)
+                            if (config.debug) {
+                                console.log("Record exists for:", recordName, ": ", existingRecord);
+                            }
                             resourceRecords = existingRecord[0].ResourceRecords.concat([newRecord]);
-                            console.log('\t setting it to:', resourceRecords.map(function (rrs) { return rrs.Value; }).join(','));
+                            if (config.debug) {
+                                console.log("\t setting it to:", resourceRecords.map(function (rrs) { return rrs.Value; }).join(","));
+                            }
                         }
                         else {
+                            if (config.debug) {
+                                console.log("Record does not exist " + recordName);
+                            }
                             resourceRecords = [newRecord];
                         }
                         return [4 /*yield*/, client
@@ -164,50 +164,43 @@ exports.create = function (config) {
                                 ChangeBatch: {
                                     Changes: [
                                         {
-                                            Action: 'UPSERT',
+                                            Action: "UPSERT",
                                             ResourceRecordSet: {
-                                                Name: recordName_1,
-                                                Type: 'TXT',
+                                                Name: recordName,
+                                                Type: "TXT",
                                                 TTL: 300,
-                                                ResourceRecords: resourceRecords,
-                                            },
-                                        },
-                                    ],
-                                    Comment: 'Updated txt record for Gezim',
-                                },
+                                                ResourceRecords: resourceRecords
+                                            }
+                                        }
+                                    ]
+                                }
                             })
                                 .promise()];
                     case 4:
                         setResults = _a.sent();
-                        console.log("Successfully set " + ch.dnsPrefix + "." + ch.dnsZone + " to \"" + txt + "\"");
-                        status_1 = setResults.ChangeInfo.Status;
-                        // while (status === 'PENDING') {
-                        //   const timeout = 5000;
-                        //   console.log(
-                        //     `\t but ... change is still pending. Will check again in ${timeout /
-                        //       1000} seconds.`
-                        //   );
-                        //   // await sleep(timeout);
-                        //   let change = await getChange(client, setResults.ChangeInfo.Id);
-                        //   status = change.ChangeInfo.Status;
-                        // }
+                        if (config.debug) {
+                            console.log("Successfully set " + recordName + " to \"" + txt + "\"");
+                        }
                         return [2 /*return*/, true];
                     case 5:
-                        e_4 = _a.sent();
-                        console.log('Error upserting txt record:', e_4);
+                        e_3 = _a.sent();
+                        console.log("Error upserting txt record:", e_3);
                         return [2 /*return*/, null];
                     case 6: return [2 /*return*/];
                 }
             });
         }); },
         remove: function (data) { return __awaiter(_this, void 0, void 0, function () {
-            var ch, txt, zoneData, zone, data_2, match, recordName, rr, e_5;
+            var ch, txt, recordName, zoneData, zone, data_1, match, rr, e_4;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        console.log('Calling remove');
                         ch = data.challenge;
                         txt = ch.dnsAuthorization;
+                        recordName = ch.dnsPrefix + "." + ch.dnsZone;
+                        if (config.debug) {
+                            console.log("Removing " + recordName + " value " + txt);
+                        }
                         _a.label = 1;
                     case 1:
                         _a.trys.push([1, 8, , 9]);
@@ -216,70 +209,80 @@ exports.create = function (config) {
                         zoneData = _a.sent();
                         zone = zoneData.filter(function (zone) { return zone.Name === ch.dnsZone; })[0];
                         if (!zone) {
-                            console.error('Zone could not be found');
+                            console.error("Zone could not be found");
                             return [2 /*return*/, null];
                         }
                         return [4 /*yield*/, client
                                 .listResourceRecordSets({
-                                HostedZoneId: zone.Id,
+                                HostedZoneId: zone.Id
                             })
                                 .promise()];
                     case 3:
-                        data_2 = _a.sent();
-                        console.log('L173 hehe: \n\t in:', data_2.ResourceRecordSets.map(function (rrs) {
-                            return {
-                                name: rrs.Name,
-                                value: rrs.ResourceRecords.map(function (rrs) { return rrs.Value; }).join(','),
-                            };
-                        }));
-                        match = data_2.ResourceRecordSets.filter(function (rrs) { return rrs.ResourceRecords.filter(function (txtRs) { return txtRs.Value.slice(1, -1) === txt; }).length; })[0];
-                        recordName = ch.dnsPrefix + "." + ch.dnsZone;
+                        data_1 = _a.sent();
+                        if (config.debug) {
+                            console.log("\n\t from one of these existing records:", data_1.ResourceRecordSets.map(function (rrs) {
+                                return {
+                                    name: rrs.Name,
+                                    value: rrs.ResourceRecords.map(function (rrs) { return rrs.Value; }).join(",")
+                                };
+                            }));
+                        }
+                        match = data_1.ResourceRecordSets.filter(function (rrs) {
+                            return rrs.ResourceRecords.filter(function (txtRs) { return txtRs.Value.slice(1, -1) === txt; }).length;
+                        } // remove quotes around record and match it against value we want to remove
+                        )[0];
                         if (!(match && match.ResourceRecords.length > 1)) return [3 /*break*/, 5];
-                        console.log("upserting to delete a record:", recordName);
-                        rr = match.ResourceRecords.filter(function (rr) { return rr.Value.slice(1, -1) !== txt; });
-                        console.log("rr:", rr.map(function (r) { return r.Value; }));
+                        if (config.debug) {
+                            console.log("Upserting to delete a value from:", recordName);
+                        }
+                        rr = match.ResourceRecords.filter(function (rr) { return rr.Value.slice(1, -1) !== txt; } // remove quotes
+                        );
+                        if (config.debug) {
+                            console.log("\t new records will look like this:", rr.map(function (r) { return r.Value; }));
+                        }
                         return [4 /*yield*/, client
                                 .changeResourceRecordSets({
                                 HostedZoneId: zone.Id,
                                 ChangeBatch: {
                                     Changes: [
                                         {
-                                            Action: 'UPSERT',
+                                            Action: "UPSERT",
                                             ResourceRecordSet: {
                                                 Name: recordName,
-                                                Type: 'TXT',
+                                                Type: "TXT",
                                                 TTL: 300,
-                                                ResourceRecords: rr,
-                                            },
-                                        },
-                                    ],
-                                    Comment: 'Updated txt record for Gezim',
-                                },
+                                                ResourceRecords: rr
+                                            }
+                                        }
+                                    ]
+                                }
                             })
                                 .promise()];
                     case 4:
                         _a.sent();
                         return [3 /*break*/, 7];
                     case 5:
-                        // delete
-                        console.log("deleting record for:", recordName);
+                        // only one record value exists, so delete it
+                        if (config.debug) {
+                            console.log("Deleting whole record:", recordName);
+                            console.log("\t value:", match.ResourceRecords.map(function (rr) { return rr.Value; }));
+                        }
                         return [4 /*yield*/, client
                                 .changeResourceRecordSets({
                                 HostedZoneId: zone.Id,
                                 ChangeBatch: {
                                     Changes: [
                                         {
-                                            Action: 'DELETE',
+                                            Action: "DELETE",
                                             ResourceRecordSet: {
                                                 Name: recordName,
-                                                Type: 'TXT',
+                                                Type: "TXT",
                                                 TTL: 300,
                                                 ResourceRecords: match.ResourceRecords
-                                            },
-                                        },
-                                    ],
-                                    Comment: 'Delete txt record for Gezim',
-                                },
+                                            }
+                                        }
+                                    ]
+                                }
                             })
                                 .promise()];
                     case 6:
@@ -287,21 +290,23 @@ exports.create = function (config) {
                         _a.label = 7;
                     case 7: return [2 /*return*/, true];
                     case 8:
-                        e_5 = _a.sent();
-                        console.log('Encountered an error deleting the record:', e_5);
+                        e_4 = _a.sent();
+                        console.log("Encountered an error deleting the record:", e_4);
                         return [2 /*return*/, null];
                     case 9: return [2 /*return*/];
                 }
             });
         }); },
         get: function (data) { return __awaiter(_this, void 0, void 0, function () {
-            var ch, txt, zoneData, zone, data_3, match, e_6;
+            var ch, txt, zoneData, zone, data_2, txtRecords, match, e_5;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
-                        console.log('Calling get');
                         ch = data.challenge;
                         txt = ch.dnsAuthorization;
+                        if (config.debug) {
+                            console.log("Getting record with " + txt + " value");
+                        }
                         _a.label = 1;
                     case 1:
                         _a.trys.push([1, 4, , 5]);
@@ -310,35 +315,32 @@ exports.create = function (config) {
                         zoneData = _a.sent();
                         zone = zoneData.filter(function (zone) { return zone.Name === ch.dnsZone; })[0];
                         if (!zone) {
-                            console.error('Zone could not be found');
+                            console.error("Zone could not be found");
                             return [2 /*return*/, null];
                         }
                         return [4 /*yield*/, client
                                 .listResourceRecordSets({
-                                HostedZoneId: zone.Id,
+                                HostedZoneId: zone.Id
                             })
                                 .promise()];
                     case 3:
-                        data_3 = _a.sent();
-                        if (data_3.IsTruncated) {
-                            throw 'Too many records to deal with. Some are truncated';
+                        data_2 = _a.sent();
+                        if (data_2.IsTruncated) {
+                            throw "Too many records to deal with. Some are truncated";
                         }
-                        data_3.ResourceRecordSets.reduce(function (acc, currentValue) {
-                            if (currentValue.ResourceRecords.filter(function (rrs) { return rrs.Value.slice(1, -1) === ch.dnsAuthorization; })) {
-                            }
-                            return acc;
-                        });
-                        match = data_3.ResourceRecordSets.filter(function (rrs) { return rrs.Type === 'TXT'; })
-                            .map(function (rrs) {
-                            var val = rrs.ResourceRecords.map(function (rec) { return rec.Value.slice(1, -1); }); // remove quotes sorrounding the strings
-                            return val;
-                        })
+                        txtRecords = data_2.ResourceRecordSets.filter(function (rrs) { return rrs.Type === "TXT"; });
+                        if (config.debug) {
+                            console.log("\t existing txt values:", txtRecords);
+                        }
+                        match = txtRecords
+                            .map(function (rrs) { return rrs.ResourceRecords.map(function (rec) { return rec.Value.slice(1, -1); }); } // remove quotes sorrounding the strings
+                        )
                             .filter(function (txtRecords) {
-                            var val = txtRecords.filter(function (rec) { return rec === ch.dnsAuthorization; });
+                            var val = txtRecords.filter(function (rec) { return rec === txt; }); // match possible multiple values
                             return val.length;
                         })
                             .map(function (txtRec) {
-                            var match = txtRec.filter(function (rec) { return rec === ch.dnsAuthorization; })[0];
+                            var match = txtRec.filter(function (rec) { return rec === txt; })[0]; // only one match should exist, get it
                             return { dnsAuthorization: match };
                         })[0];
                         if (!match || match.dnsAuthorization === undefined) {
@@ -346,13 +348,13 @@ exports.create = function (config) {
                         }
                         return [2 /*return*/, match];
                     case 4:
-                        e_6 = _a.sent();
-                        console.log('Encountered an error getting TXT records:', e_6);
+                        e_5 = _a.sent();
+                        console.log("Encountered an error getting TXT records:", e_5);
                         return [2 /*return*/, null];
                     case 5: return [2 /*return*/];
                 }
             });
-        }); },
+        }); }
     };
 };
 //# sourceMappingURL=stradge.js.map
