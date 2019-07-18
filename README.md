@@ -115,12 +115,16 @@ tester.testZone('dns-01', zone, challenger).then(function() {
 });
 ```
 
-To run tests against this package, update the values of `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in `./test.js` and then run the test:
+To run tests against this package, use this command:
 
 
 ```bash
-node ./test.js
+npm run build && node ./test.js 'YOUR_AWS_ACCESS_KEY_ID' 'YOUR_AWS_SECRET_ACCESS_KEY'
 ```
+
+This builds the TypeScript source first before running the test.
+
+
 
 # Authors
 

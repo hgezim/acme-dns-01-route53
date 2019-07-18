@@ -1,3 +1,3 @@
 'use strict';
 
-module.exports = require('./dist/stradge');
+module.exports = require('./dist/route53');

@@ -1,9 +1,15 @@
 var tester = require('acme-dns-01-test');
+var process = require('process');
 
-//var challenger = require('acme-dns-01-cli').create({});
+if (process.argv.length < 4) {
+  console.log('Please pass AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY as arguments:')
+  console.log("node ./test.js 'YOUR_AWS_ACCESS_KEY_ID' 'YOUR_AWS_SECRET_ACCESS_KEY'")
+  return -1;
+}
+
 var challenger = require('./index.js').create({
-    AWS_ACCESS_KEY_ID: 'AKIA4R7OX2WJOI3BFFWZ',
-    AWS_SECRET_ACCESS_KEY: 'vYhnlu5o8nE9eYgIfIFVF0P4u2XUcSvULhIjvmR/',
+    AWS_ACCESS_KEY_ID: process.argv[2],
+    AWS_SECRET_ACCESS_KEY: process.argv[3],
     // debug: true
 });
 
