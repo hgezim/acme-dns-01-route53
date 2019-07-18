@@ -297,10 +297,9 @@ export const create = function(
           rrs => rrs.Type === "TXT"
         );
 
-if(config.debug) {
+        if (config.debug) {
           console.log("\t existing txt values:", txtRecords);
-  
-}
+        }
         let match = txtRecords
           .map(
             rrs => rrs.ResourceRecords.map(rec => rec.Value.slice(1, -1)) // remove quotes sorrounding the strings
