@@ -10,7 +10,8 @@ if (process.argv.length < 5) {
 var challenger = require('./index.js').create({
     AWS_ACCESS_KEY_ID: process.argv[3],
     AWS_SECRET_ACCESS_KEY: process.argv[4],
-    // debug: true
+    // debug: true,
+    // ensureSync: true
 });
 
 // The dry-run tests can pass on, literally, 'example.com'

@@ -19,6 +19,16 @@ const getZones = async (client: AWS.Route53) => {
   }
 };
 
+const getChange = async (client: AWS.Route53, changeId: string) => {
+  try {
+    let change = await client.getChange({ Id: changeId }).promise();
+    return change;
+  } catch (e) {
+    console.log(`Error polling for change: ${changeId}:`, e);
+    throw e;
+  }
+};
+
 const sleep = (ms: number) => {
   return new Promise(resolve => setTimeout(resolve, ms));
 };
@@ -27,13 +37,15 @@ type Config = {
   AWS_ACCESS_KEY_ID: string;
   AWS_SECRET_ACCESS_KEY: string;
   debug: boolean;
+  ensureSync: boolean;
 };
 
 export const create = function(
   config: Config = {
     AWS_ACCESS_KEY_ID: "",
     AWS_SECRET_ACCESS_KEY: "",
-    debug: false
+    debug: false,
+    ensureSync: false
   }
 ) {
   const client = new AWS.Route53({
@@ -142,6 +154,23 @@ export const create = function(
 
         if (config.debug) {
           console.log(`Successfully set ${recordName} to "${txt}"`);
+        }
+
+        if (config.ensureSync) {
+          let status = setResults.ChangeInfo.Status;
+          while (status === "PENDING") {
+            const timeout = 5000;
+
+            if (config.debug) {
+              console.log(
+                `\t but ... change is still pending. Will check again in ${timeout /
+                  1000} seconds.`
+              );
+            }
+            await sleep(timeout);
+            let change = await getChange(client, setResults.ChangeInfo.Id);
+            status = change.ChangeInfo.Status;
+          }
         }
 
         return true;

@@ -37,7 +37,8 @@ First you create an instance with your credentials:
 var dns01 = require('acme-dns-01-route53').create({
     AWS_ACCESS_KEY_ID: 'AKIA4R7OX2WJOI3BFFWZ', // change this to your own Access key ID
     AWS_SECRET_ACCESS_KEY: 'vYhnlu5o8nE9eYgIfIFVF0P4u2XUcSvULhIjvmR/', // change this to your own Secret access key
-    // debug: true // enable this for detailed logs
+	// debug: true // enable this for detailed logs
+	// ensureSync: true // AWS Route 53 does transactional changes which means it has a status of PENDING until in ensures that changes complete entirely on any individual DNS server, or not at all. You can force wait by setting this flag to true and it'll poll the changes until they're no longer pending. 
 });
 ```
 

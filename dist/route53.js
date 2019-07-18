@@ -62,6 +62,24 @@ var getZones = function (client) { return __awaiter(_this, void 0, void 0, funct
         }
     });
 }); };
+var getChange = function (client, changeId) { return __awaiter(_this, void 0, void 0, function () {
+    var change, e_2;
+    return __generator(this, function (_a) {
+        switch (_a.label) {
+            case 0:
+                _a.trys.push([0, 2, , 3]);
+                return [4 /*yield*/, client.getChange({ Id: changeId }).promise()];
+            case 1:
+                change = _a.sent();
+                return [2 /*return*/, change];
+            case 2:
+                e_2 = _a.sent();
+                console.log("Error polling for change: " + changeId + ":", e_2);
+                throw e_2;
+            case 3: return [2 /*return*/];
+        }
+    });
+}); };
 var sleep = function (ms) {
     return new Promise(function (resolve) { return setTimeout(resolve, ms); });
 };
@@ -70,7 +88,8 @@ exports.create = function (config) {
     if (config === void 0) { config = {
         AWS_ACCESS_KEY_ID: "",
         AWS_SECRET_ACCESS_KEY: "",
-        debug: false
+        debug: false,
+        ensureSync: false
     }; }
     var client = new AWS.Route53({
         accessKeyId: config.AWS_ACCESS_KEY_ID,
@@ -81,7 +100,7 @@ exports.create = function (config) {
             return null;
         },
         zones: function (opts) { return __awaiter(_this, void 0, void 0, function () {
-            var zones, e_2;
+            var zones, e_3;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -91,15 +110,15 @@ exports.create = function (config) {
                         zones = _a.sent();
                         return [2 /*return*/, zones.map(function (zone) { return zone.Name; })];
                     case 2:
-                        e_2 = _a.sent();
-                        console.error("Error listing zones:", e_2);
+                        e_3 = _a.sent();
+                        console.error("Error listing zones:", e_3);
                         return [2 /*return*/, null];
                     case 3: return [2 /*return*/];
                 }
             });
         }); },
         set: function (data) { return __awaiter(_this, void 0, void 0, function () {
-            var ch, txt, recordName, zoneData, zone, recordSetResults, existingRecord, newRecord, resourceRecords, setResults, e_3;
+            var ch, txt, recordName, zoneData, zone, recordSetResults, existingRecord, newRecord, resourceRecords, setResults, status_1, timeout, change, e_4;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -111,7 +130,7 @@ exports.create = function (config) {
                         }
                         _a.label = 1;
                     case 1:
-                        _a.trys.push([1, 5, , 6]);
+                        _a.trys.push([1, 9, , 10]);
                         return [4 /*yield*/, getZones(client)];
                     case 2:
                         zoneData = _a.sent();
@@ -181,17 +200,35 @@ exports.create = function (config) {
                         if (config.debug) {
                             console.log("Successfully set " + recordName + " to \"" + txt + "\"");
                         }
-                        return [2 /*return*/, true];
+                        if (!config.ensureSync) return [3 /*break*/, 8];
+                        status_1 = setResults.ChangeInfo.Status;
+                        _a.label = 5;
                     case 5:
-                        e_3 = _a.sent();
-                        console.log("Error upserting txt record:", e_3);
+                        if (!(status_1 === "PENDING")) return [3 /*break*/, 8];
+                        timeout = 5000;
+                        if (config.debug) {
+                            console.log("\t but ... change is still pending. Will check again in " + timeout /
+                                1000 + " seconds.");
+                        }
+                        return [4 /*yield*/, sleep(timeout)];
+                    case 6:
+                        _a.sent();
+                        return [4 /*yield*/, getChange(client, setResults.ChangeInfo.Id)];
+                    case 7:
+                        change = _a.sent();
+                        status_1 = change.ChangeInfo.Status;
+                        return [3 /*break*/, 5];
+                    case 8: return [2 /*return*/, true];
+                    case 9:
+                        e_4 = _a.sent();
+                        console.log("Error upserting txt record:", e_4);
                         return [2 /*return*/, null];
-                    case 6: return [2 /*return*/];
+                    case 10: return [2 /*return*/];
                 }
             });
         }); },
         remove: function (data) { return __awaiter(_this, void 0, void 0, function () {
-            var ch, txt, recordName, zoneData, zone, data_1, match, rr, e_4;
+            var ch, txt, recordName, zoneData, zone, data_1, match, rr, e_5;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -290,15 +327,15 @@ exports.create = function (config) {
                         _a.label = 7;
                     case 7: return [2 /*return*/, true];
                     case 8:
-                        e_4 = _a.sent();
-                        console.log("Encountered an error deleting the record:", e_4);
+                        e_5 = _a.sent();
+                        console.log("Encountered an error deleting the record:", e_5);
                         return [2 /*return*/, null];
                     case 9: return [2 /*return*/];
                 }
             });
         }); },
         get: function (data) { return __awaiter(_this, void 0, void 0, function () {
-            var ch, txt, zoneData, zone, data_2, txtRecords, match, e_5;
+            var ch, txt, zoneData, zone, data_2, txtRecords, match, e_6;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
@@ -348,8 +385,8 @@ exports.create = function (config) {
                         }
                         return [2 /*return*/, match];
                     case 4:
-                        e_5 = _a.sent();
-                        console.log("Encountered an error getting TXT records:", e_5);
+                        e_6 = _a.sent();
+                        console.log("Encountered an error getting TXT records:", e_6);
                         return [2 /*return*/, null];
                     case 5: return [2 /*return*/];
                 }
