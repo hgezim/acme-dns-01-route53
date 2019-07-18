@@ -119,7 +119,7 @@ To run tests against this package, use this command:
 
 
 ```bash
-npm run build && node ./test.js 'YOUR_AWS_ACCESS_KEY_ID' 'YOUR_AWS_SECRET_ACCESS_KEY'
+npm run build && node ./test.js 'example.com' 'YOUR_AWS_ACCESS_KEY_ID' 'YOUR_AWS_SECRET_ACCESS_KEY'
 ```
 
 This builds the TypeScript source first before running the test.
