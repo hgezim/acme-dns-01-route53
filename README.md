@@ -12,8 +12,8 @@ Passes [acme-dns-01-test](https://git.rootprojects.org/root/acme-dns-01-test.js)
   - [x] Uses AWS SDK
   - [x] ACME.js, Greenlock.js, and others
   - [x] Quality
-  - [x] Node v6 compatible VanillaJS
-  - [x] Uses TypeScript
+  - [x] Node v6 compatible
+  - [x] Written in TypeScript
 
 ## Install
 
